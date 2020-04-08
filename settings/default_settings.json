@@ -1,0 +1,18 @@
+{
+    "shape": {
+        "title_row": 4,
+        "title_col": 1,
+        "main_header_row": 7,
+        "props_header_start_col": 5,
+        "props_header_tally_first": 5,
+        "no_summary_table_rows": 3,
+        "summary_table_sum_row": 1,
+        "props_header_end_col": -1,
+    },
+    "names": {
+        "country_col": "COUNTRY NAME",
+        "store_col": "STORE NAME",
+        "main_cols": ["COUNTRY NAME", "STORE NAME"],
+        "entity_list": ["CKS","CKI","CKC"]
+    }
+}
