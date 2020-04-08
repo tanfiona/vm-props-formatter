@@ -26,6 +26,7 @@ current_load_settings_clicks = 0
 current_save_settings_clicks = 0
 current_load_default_settings_clicks = 0
 so_format_data = pd.DataFrame()
+checked_data = pd.DataFrame()
 report_filename = 'VM Props Analysis Report.xlsx'
 settings = {}
 settings_path = 'settings/default_settings.json'
@@ -347,6 +348,16 @@ app.layout = html.Div(
                                                                     style=center_placement_style
                                                                 )
                                                             ]
+                                                        ),
+                                                        html.Div(
+                                                            id='checked-datatable-area',
+                                                            children=[
+                                                                html.H4('Cross Checked Table'),
+                                                                html.Div(
+                                                                    [generate_empty_datatable('checked-datatable')],
+                                                                    style=center_placement_style
+                                                                )
+                                                            ]
                                                         )
                                                     ]
                                                 )
@@ -596,6 +607,9 @@ def load_settings(load_settings_clicks, load_default_settings_clicks):
         Output('so-format-datatable', 'data'),
         Output('so-format-datatable', 'columns'),
         Output('so-format-datatable', 'selected_rows'),
+        Output('checked-datatable', 'data'),
+        Output('checked-datatable', 'columns'),
+        Output('checked-datatable', 'selected_rows'),
         Output('download-report-area', 'children')
     ],
     [
@@ -641,10 +655,13 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
     """
     global current_start_analysis_clicks
     global so_format_data
+    global checked_data
     global settings
     
     so_format_datatable_data = {}
     so_format_datatable_columns = []
+    checked_datatable_data = {}
+    checked_datatable_columns = []
     download_report_output = []
     are_outputs_available = False
 
@@ -668,15 +685,31 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
             data, data_sh_colours = vm.load_dataset(vm_props_order_summary_file, vm_props_order_summary_filename)
             main_data = vm.get_main_data(data)
             main_data = vm.dropna_rows_cols(main_data)
-            so_format_data = main_data
-
+            # load parameters if not specified
+            col_name_list = vm.get_index_to_split_tables(main_data)
+            if len(col_name_list) == 1:
+                data_1, data_2 = vm.get_split_data(main_data, col_name_list)
+            elif len(col_name_list) == 2:
+                data_1, data_2, data_3 = vm.get_split_data(main_data, col_name_list)
+            data_1_clean = vm.clean_main_data(data_1.copy())
+            col_name_list = vm.get_index_to_split_tables2(data_1_clean)
+            data_1_head, data_1_body = vm.get_split_data(data_1_clean, col_name_list)
+            summary_df = vm.shorten_table_w_max_rows(data_2)
+            df = vm.format_main_data(data_1_body)
+            checked_data = vm.main_and_summary_checker(df, summary_df)
+            so_table = vm.main_table_to_so_converter(df)
+            so_format_data = vm.get_cell_colour_col(so_table, data_sh_colours)
         # Format outputs
         if so_format_data is not None and not so_format_data.empty:
             # table not showing until second click
             so_format_datatable_data = so_format_data.to_dict('rows')
             so_format_datatable_columns = [{'name': i, 'id': i} for i in so_format_data.columns]
             are_outputs_available = True
-
+        if checked_data is not None and not checked_data.empty:
+            # table not showing until second click; why?
+            checked_datatable_data = checked_data.to_dict('rows')
+            checked_datatable_columns = [{'name': i, 'id': i} for i in checked_data.columns]
+            are_outputs_available = True
         # Generate report download link
         if are_outputs_available:
             download_report_output = [
@@ -690,7 +723,8 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
         # Update current clicks
         current_start_analysis_clicks = start_analysis_clicks
         
-    return so_format_datatable_data, so_format_datatable_columns, [], download_report_output
+    return so_format_datatable_data, so_format_datatable_columns, [], \
+           checked_datatable_data, checked_datatable_columns, [], download_report_output
 
 
 # Download the report
@@ -709,11 +743,51 @@ def download_report():
         File sending function
     """
     global so_format_data
-    buffer = io.BytesIO()
-    excel_writer = pd.ExcelWriter(buffer, engine='openpyxl')
-    so_format_data.to_excel(excel_writer, sheet_name='SO Table', index=False)
-    excel_writer.save()
-    buffer.seek(0)
+    global checked_data
+
+    def format_and_save_excel(summary_df, so_table, keep_cols=None):
+
+        buffer = io.BytesIO()
+
+        if keep_cols is not None:
+            so_table = so_table[keep_cols]
+
+        # Create a Pandas Excel writer using XlsxWriter as the engine.
+        writer = pd.ExcelWriter(buffer, engine='xlsxwriter')
+
+        # Convert dataframes to an XlsxWriter Excel object. 
+        so_table.to_excel(writer, sheet_name='SO_Table', encoding='utf8')
+        summary_df.to_excel(writer, sheet_name='Summary', encoding='utf8')
+
+        # Get the xlsxwriter workbook and worksheet objects.
+        workbook = writer.book
+        worksheet = writer.sheets['SO_Table']
+
+        for i in list(so_table[so_table['Cell_Colour'] != '00000000'].index):
+            hex_code = '#' + str(so_table['Cell_Colour'].loc[i][-6:])
+            cell_format = workbook.add_format()
+            cell_format.set_pattern(1)
+            cell_format.set_bg_color(hex_code)
+            worksheet.set_row(i + 1,  # +1 due to cells start from 1 but python 0
+                              None,  # do not change row height
+                              cell_format  # add bg colour
+                              )
+
+        for i in list(so_table[so_table['COUNTRY NAME'] == 'TOTAL'].index):
+            cell_format = workbook.add_format({'bold': True, 'border': 3})
+            cell_format.set_pattern(1)
+            cell_format.set_bg_color('#e5e5e5')
+            worksheet.set_row(i + 1,  # +1 due to cells start from 1 but python 0
+                              None,  # do not change row height
+                              cell_format  # add bold and grey bg for row
+                              )
+
+        # Close the Pandas Excel writer and output the Excel file.
+        writer.save()
+        buffer.seek(0)
+        return buffer
+
+    buffer = format_and_save_excel(checked_data, so_format_data)
     return send_file(
         buffer,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

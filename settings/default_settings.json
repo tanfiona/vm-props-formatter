@@ -10,6 +10,7 @@
         "props_header_end_col": -1
     },
     "names": {
+        "sheet_name": "",
         "country_col": "COUNTRY NAME",
         "store_col": "STORE NAME",
         "main_cols": ["COUNTRY NAME", "STORE NAME"],
