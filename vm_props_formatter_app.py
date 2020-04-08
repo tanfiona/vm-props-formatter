@@ -1,6 +1,7 @@
 import argparse
 import base64
 import dash
+import datetime
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_table as dt
@@ -9,7 +10,9 @@ import pandas as pd
 import webbrowser
 from dash.dependencies import Input, State, Output
 from flask import send_file
+from vm_props_formatter.vm_props_manager import VMPropsManager
 from vm_props_formatter.utils.logger import format_logs
+from vm_props_formatter.utils.json_parser import read_json, write_json
 
 # Set up the app
 app = dash.Dash(__name__)
@@ -18,9 +21,17 @@ server = app.server
 app_url = 'http://127.0.0.1:8050/'
 
 # Define global variables
-current_start_order_check_click_count = 0
-rejected_data = {}
-report_filename = 'report.xlsx'
+current_start_analysis_clicks = 0
+current_load_settings_clicks = 0
+current_save_settings_clicks = 0
+current_load_default_settings_clicks = 0
+so_format_data = pd.DataFrame()
+report_filename = 'VM Props Analysis Report.xlsx'
+settings = {}
+settings_path = 'settings/default_settings.json'
+outputs_path = 'outputs/'
+image_filename = 'settings/ck_logo.png'
+encoded_image = base64.b64encode(open(image_filename, 'rb').read())
 
 # Define upload default text
 upload_default_text = html.Div([
@@ -31,17 +42,31 @@ upload_default_text = html.Div([
 input_area_style = {
     'width': '23%',
     'display': 'inline-block',
-    'vertical-align': 'top'
+    'vertical-align': 'top',
+    'font-family': 'Helvetica'
 }
 separator_area_style = {
     'width': '2%',
     'display': 'inline-block',
-    'vertical-align': 'top'
+    'vertical-align': 'top',
+    'font-family': 'Helvetica'
 }
 output_area_style = {
     'width': '75%',
     'display': 'inline-block',
+    'vertical-align': 'top',
+    'font-family': 'Helvetica'
+}
+left_output_area_style = {
+    'width': '47%',
+    'display': 'inline-block',
     'vertical-align': 'top'
+}
+right_output_area_style = {
+    'width': '47%',
+    'display': 'inline-block',
+    'vertical-align': 'top',
+    'font-family': 'Helvetica'
 }
 upload_box_style = {
     'width': '100%',
@@ -51,17 +76,20 @@ upload_box_style = {
     'borderStyle': 'dashed',
     'borderRadius': '10px',
     'textAlign': 'center',
-    'margin': '0px'
+    'margin': '0px',
+    'font-family': 'Helvetica'
 }
-start_button_style = {
+button_style = {
     'width': '50%',
     'height': '60px',
-    'textAlign': 'center'
+    'textAlign': 'center',
+    'font-family': 'Helvetica'
 }
 center_placement_style = {
     'display': 'flex',
     'align-items': 'center',
-    'justify-content': 'center'
+    'justify-content': 'center',
+    'font-family': 'Helvetica'
 }
 
 # UI defs
@@ -218,11 +246,38 @@ def generate_no_error_message():
     )
 
 
+def generate_slider(id):
+    m = 5 # multiple 
+    max_v = 20 # max bar
+    count = int(round(max_v/m,0)) # number of marks
+    markers = {}
+    for i in range(m,(count+1)*m,m):
+        markers[i]= str(i) # add items to dict
+    return dcc.Slider(
+        id=id,
+        min=0,
+        max=max_v,
+        step=1,
+        marks=markers
+    )
+
 # Define app layout
 app.layout = html.Div(
     id='app-body',
     children=[
-        html.H1('Order Checking'),
+        html.Div([
+            html.H1('VM Props Formatter')
+        ], style={'text-align': 'left',
+                  'margin-right': 20,
+                  'display': 'inline-block',
+                  'font-family': 'Helvetica'}),
+        html.Div([
+            html.Img(
+                src='data:image/png;base64,{}'.format(encoded_image.decode()),
+                style={'height': '60%',
+                       'width': '60%'})
+        ], style={'float': 'right',
+                  'display': 'inline-block'}),
         html.Div(
             id='tabs-area',
             children=[
@@ -230,11 +285,12 @@ app.layout = html.Div(
                     id='tabs',
                     children=[
                         dcc.Tab(
-                            id='shipping-order-tab',
-                            label='Shipping Order',
+                            id='analysis-tab',
+                            label='Analysis',
                             children=[
+                                html.P(''),
                                 html.Div(
-                                    id='shipping-order-input-area',
+                                    id='analysis-input-area',
                                     children=[
                                         html.P('VM Props Order Summary File'),
                                         dcc.Upload(
@@ -258,7 +314,7 @@ app.layout = html.Div(
                                                     id='start-order-check-button',
                                                     n_clicks=0,
                                                     children='Start checking',
-                                                    style=start_button_style
+                                                    style=button_style
                                                 )
                                             ],
                                             style=center_placement_style
@@ -275,7 +331,7 @@ app.layout = html.Div(
                                     style=separator_area_style
                                 ),
                                 html.Div(
-                                    id='shipping-order-output-area',
+                                    id='analysis-output-area',
                                     children=[
                                         dcc.Loading(
                                             id='loading',
@@ -285,8 +341,11 @@ app.layout = html.Div(
                                                         html.Div(
                                                             id='so-format-datatable-area',
                                                             children=[
-                                                                html.H4('Matched Stock Transfers'),
-                                                                html.Div([generate_empty_datatable('so-format-datatable')], style=center_placement_style)
+                                                                html.H4('SO Table'),
+                                                                html.Div(
+                                                                    [generate_empty_datatable('so-format-datatable')],
+                                                                    style=center_placement_style
+                                                                )
                                                             ]
                                                         )
                                                     ]
@@ -297,6 +356,90 @@ app.layout = html.Div(
                                         ),
                                     ],
                                     style=output_area_style
+                                )
+                            ]
+                        ),
+                        dcc.Tab(
+                            id='settings-tab',
+                            label='Settings',
+                            children=[
+                                html.Div(
+                                    id='settings-input-area',
+                                    children=[
+                                        html.P(''),
+                                        html.Div(
+                                            children=[
+                                                html.Button(
+                                                    id='settings-load-button',
+                                                    n_clicks=0,
+                                                    children='Load Settings',
+                                                    style=button_style
+                                                )
+                                            ],
+                                            style=center_placement_style
+                                        ),
+                                        html.P(''),
+                                        html.Div(
+                                            children=[
+                                                html.Button(
+                                                    id='settings-save-button',
+                                                    n_clicks=0,
+                                                    children='Save Settings',
+                                                    style=button_style
+                                                )
+                                            ],
+                                            style=center_placement_style
+                                        ),
+                                        html.P(''),
+                                        html.Div(
+                                            children=[
+                                                html.Button(
+                                                    id='default-settings-load-button',
+                                                    n_clicks=0,
+                                                    children='Load Default Settings',
+                                                    style=button_style
+                                                )
+                                            ],
+                                            style=center_placement_style
+                                        )
+                                    ],
+                                    style=input_area_style
+                                ),
+                                html.Div(
+                                    id='settings-separator-area',
+                                    style=separator_area_style
+                                ),
+                                html.Div(
+                                    id='settings-output-area',
+                                    children=[
+                                        dcc.Loading(
+                                            id='settings-output-loading',
+                                            children=[
+                                                html.Div(
+                                                    id='left-separator-settings-output-area',
+                                                    style=separator_area_style
+                                                ),
+                                                html.Div(
+                                                    id='left-settings-output-area',
+                                                    children=[
+                                                        html.H4(
+                                                            'Data Shape Definitions',
+                                                            id='settings-shape'),
+                                                        html.P(
+                                                            id='settings-shape-main-header-row-text'
+                                                        ),
+                                                        generate_slider(
+                                                            'settings-shape-main-header-row-slider'
+                                                        )
+                                                    ]
+                                                )
+                                            ]
+                                        )
+                                    ],
+                                    style=output_area_style
+                                ),
+                                html.P(
+                                    id='settings-placeholder'
                                 )
                             ]
                         )
@@ -338,15 +481,15 @@ def display_vm_props_order_summary_filename(vm_props_order_summary_content, vm_p
     [Input('upload-country-whs-names', 'contents')],
     [State('upload-country-whs-names', 'filename')]
 )
-def display_repeat_order_filename(country_whs_content, ountry_whs_filename):
+def display_country_whs_filename(country_whs_content, country_whs_filename):
     """
     Display repeat order filename
 
     Parameters
     ----------
-    repeat_order_content : str
+    country_whs_content : str
         File content
-    repeat_order_filename : str
+    country_whs_filename : str
         Filename
 
     Returns
@@ -354,8 +497,8 @@ def display_repeat_order_filename(country_whs_content, ountry_whs_filename):
     output : dash_html_components.Div
         Filename
     """
-    if None not in (country_whs_content, ountry_whs_filename):
-        return html.Div([ountry_whs_filename])
+    if None not in (country_whs_content, country_whs_filename):
+        return html.Div([country_whs_filename])
     else:
         return upload_default_text
 
@@ -387,6 +530,68 @@ def display_props_batch_filename(props_batch_content, props_batch_filename):
         return upload_default_text
 
 @app.callback(
+    Output('settings-shape-main-header-row-text', 'children'),
+    [Input('settings-shape-main-header-row-slider', 'value')]
+)
+def update_settings(main_header_row):
+    # load settings
+    global settings
+    # define texts
+    main_header_row_text = 'SkipRows to Main Header'
+    # update settings (no output)
+    if len(settings) > 0:
+        settings['shape']['main_header_row'] = main_header_row
+    # return texts
+    return main_header_row_text
+
+@app.callback(
+    Output('settings-placeholder', 'children'),
+    [
+        Input('settings-save-button', 'n_clicks')
+    ]
+)
+def save_settings(save_settings_clicks):
+    """"""
+    global current_save_settings_clicks
+    global settings
+    if save_settings_clicks > current_save_settings_clicks:
+        filename = settings_path
+        write_json(settings, filename)
+        current_save_settings_clicks = save_settings_clicks
+    return None
+
+@app.callback(
+    Output('settings-shape-main-header-row-slider', 'value')
+    ,
+    [
+        Input('settings-load-button', 'n_clicks'),
+        Input('default-settings-load-button', 'n_clicks')
+    ]
+)
+def load_settings(load_settings_clicks, load_default_settings_clicks):
+    global current_load_settings_clicks
+    global current_load_default_settings_clicks
+    global settings
+    if load_settings_clicks is not None and load_settings_clicks > 0 and load_settings_clicks > current_load_settings_clicks:
+        print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Loading the settings ...')
+        filename = settings_path
+        values = read_json(filename)
+        current_load_settings_clicks = load_settings_clicks
+    elif load_default_settings_clicks is not None and load_default_settings_clicks > 0 and load_default_settings_clicks > current_load_default_settings_clicks:
+        print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Loading the default settings ...')
+        values = VMPropsManager().get_default_parameters()
+        current_load_default_settings_clicks = load_default_settings_clicks
+    else:
+        values = None
+    print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Loaded settings: ', values)
+    if values is not None:
+        settings = values
+        return settings['shape']['main_header_row']
+    else:
+        return None
+
+
+@app.callback(
     [
         Output('so-format-datatable', 'data'),
         Output('so-format-datatable', 'columns'),
@@ -405,7 +610,7 @@ def display_props_batch_filename(props_batch_content, props_batch_filename):
         State('upload-props-batch-names', 'filename'),
     ]
 )
-def check_order(vm_props_order_summary_content, country_whs_content, props_batch_content, start_clicks, 
+def run_analysis(vm_props_order_summary_content, country_whs_content, props_batch_content, start_analysis_clicks,
                 vm_props_order_summary_filename, country_whs_content_filename, props_batch_content_filename):
     """
     Perform checking of the files
@@ -422,7 +627,7 @@ def check_order(vm_props_order_summary_content, country_whs_content, props_batch
         Repeat order file
     business_rules_content : str
         Business rules file
-    start_clicks : int
+    start_analysis_clicks : int
         Total clicks of start button
     vm_props_order_summary_filename : str
         VM Props order summary filename
@@ -434,16 +639,40 @@ def check_order(vm_props_order_summary_content, country_whs_content, props_batch
     download_report_output: list
         Report download link
     """
-    global current_start_order_check_click_count
+    global current_start_analysis_clicks
     global so_format_data
-    so_format_data = pd.DataFrame({'A':[1,3,4], 'B':[2,5,6]})
+    global settings
+    
+    so_format_datatable_data = {}
+    so_format_datatable_columns = []
     download_report_output = []
     are_outputs_available = False
-    if start_clicks is not None and start_clicks > 0 and start_clicks > current_start_order_check_click_count:
+
+    if start_analysis_clicks > 0 and start_analysis_clicks > current_start_analysis_clicks:
+        filename = settings_path
+        settings = read_json(filename)
+        print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Updating the settings ...')
+        
         # Run checking
+        if None not in (vm_props_order_summary_content, vm_props_order_summary_filename):
+            vm_props_order_summary_file = io.BytesIO(base64.b64decode(vm_props_order_summary_content.split(',')[-1]))
+        else:
+            vm_props_order_summary_file = None
+            
+        if None not in (vm_props_order_summary_file, vm_props_order_summary_filename):
+            # Initialise
+            vm = VMPropsManager(settings)
+            # Run analysis
+            print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Updating the settings ...')
+
+            data, data_sh_colours = vm.load_dataset(vm_props_order_summary_file, vm_props_order_summary_filename)
+            main_data = vm.get_main_data(data)
+            main_data = vm.dropna_rows_cols(main_data)
+            so_format_data = main_data
 
         # Format outputs
         if so_format_data is not None and not so_format_data.empty:
+            # table not showing until second click
             so_format_datatable_data = so_format_data.to_dict('rows')
             so_format_datatable_columns = [{'name': i, 'id': i} for i in so_format_data.columns]
             are_outputs_available = True
@@ -457,9 +686,10 @@ def check_order(vm_props_order_summary_content, country_whs_content, props_batch
                     href='/downloads/'
                 )
             ]
-        # Update current clicks
-        current_start_order_check_click_count = start_clicks
 
+        # Update current clicks
+        current_start_analysis_clicks = start_analysis_clicks
+        
     return so_format_datatable_data, so_format_datatable_columns, [], download_report_output
 
 
@@ -481,8 +711,7 @@ def download_report():
     global so_format_data
     buffer = io.BytesIO()
     excel_writer = pd.ExcelWriter(buffer, engine='openpyxl')
-    for key in so_format_data.keys():
-        so_format_data[key].to_excel(excel_writer, sheet_name=key, index=False)
+    so_format_data.to_excel(excel_writer, sheet_name='SO Table', index=False)
     excel_writer.save()
     buffer.seek(0)
     return send_file(
@@ -503,3 +732,6 @@ if __name__ == '__main__':
     webbrowser.open(app_url)
     # Run the Dash server
     app.run_server(debug=arguments.debug)
+
+
+

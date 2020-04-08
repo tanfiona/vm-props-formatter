@@ -1,18 +1,18 @@
 import os
 
 
-def check_create_directory(filename):
+def check_create_directory(file_path):
     """
     Check and create the directory if it does not exist
     
     Parameters
     ----------
-    filename : new filename
+    file_path : new file path
 
     Returns
     -------
     None
     """
-    directory = os.path.dirname(filename)
+    directory = os.path.dirname(file_path)
     if not os.path.exists(directory):
         os.makedirs(directory)

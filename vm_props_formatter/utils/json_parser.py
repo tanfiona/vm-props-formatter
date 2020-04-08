@@ -1,6 +1,6 @@
 import json
 import os
-from stock_replenishment.utils.file_organizer import check_create_directory
+from vm_props_formatter.utils.file_organizer import check_create_directory
 
 def read_json(filename):
     """

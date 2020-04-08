@@ -7,7 +7,7 @@
         "props_header_tally_first": 5,
         "no_summary_table_rows": 3,
         "summary_table_sum_row": 1,
-        "props_header_end_col": -1,
+        "props_header_end_col": -1
     },
     "names": {
         "country_col": "COUNTRY NAME",
