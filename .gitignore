@@ -4,3 +4,7 @@ vm_props_formatter/utils/__pycache__/logger.cpython-36.pyc
 vm_props_formatter/__pycache__/vm_props_manager.cpython-36.pyc
 .idea/workspace.xml
 vm_props_formatter/utils/__pycache__/json_parser.cpython-36.pyc
+.idea/modules.xml
+.idea/VMProps.iml
+.idea/misc.xml
+.idea/vcs.xml

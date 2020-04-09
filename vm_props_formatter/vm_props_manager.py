@@ -15,7 +15,7 @@ class VMPropsManager(object):
         "shape": {
             "title_row": 4,
             "title_col": 1,
-            "main_header_row": 10,
+            "main_header_row": 7,
             "props_header_start_col": 5,
             "props_header_tally_first": 5,
             "no_summary_table_rows": 3,
