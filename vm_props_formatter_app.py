@@ -48,15 +48,16 @@ hover_text = {
     'settings-shape-props-header-end-col-text': 
         ['e.g. Last column (REMARKS) to drop that do not require to tallying'],
     'settings-names-sheet-name-text':
-        [],
+        ['If left as blank, app auto-reads sheet name that has any of the entity names indicated below'],
     'settings-names-store-col-text':
-        [],
+        ['Column name that represents Store'],
     'settings-names-country-col-text':
-        [],
+        ['Column name that represents Country'],
     'settings-names-main-cols-text':
-        [],
+        ['Main cols that represents index of SO Table.',html.Br(),
+         'Tip: Put only Country if the Store Locations given are wrong.'],
     'settings-names-entity-list-text':
-        []
+        ['This list indicates how to find sheet name based on if entity is present in file name.']
 }
 entity_list = ['CKS','CKI','CKC']
 
