@@ -1056,7 +1056,7 @@ def download_report():
                               cell_format  # add bg colour
                               )
 
-        for i in list(so_table[so_table['COUNTRY NAME'] == 'TOTAL'].index):
+        for i in list(so_table[so_table.iloc[:, 0] == 'TOTAL'].index):
             cell_format = workbook.add_format({'bold': True, 'border': 3})
             cell_format.set_pattern(1)
             cell_format.set_bg_color('#e5e5e5')

@@ -346,16 +346,13 @@ class VMPropsManager(object):
         # return so format table
         return so_table.reset_index(drop='True')
 
-    def get_cell_colour_col(self, so_table, original_sheet, country_col=None):
-        # load parameters if not specified
-        if country_col is None:
-            country_col = self.__parameters['names']['country_col']
+    def get_cell_colour_col(self, so_table, original_sheet):
         # run analysis
         so_table['Cell_Colour'] = so_table['XCell'].apply(lambda x: str(original_sheet[x].fill.start_color.index))
-        so_table['Cell_Colour'] = [
-            '00000000' if colour == '0' or country == 'TOTAL' else colour
-            for colour, country in zip(so_table['Cell_Colour'], so_table[country_col])
-        ]
+        so_table['Cell_Colour'] = so_table['Cell_Colour'].apply(lambda x: '00000000' if x == '0' else x)
+        # rename total rows
+        for col in ['XRow', 'XCol', 'XCell', 'Cell_Colour']:
+            so_table.loc[so_table.iloc[:, 0] == 'TOTAL', col] = ''
         return so_table
 
     def get_file_name(self, sheet_name=None):
