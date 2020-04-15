@@ -196,8 +196,19 @@ class VMPropsManager(object):
                 col_name_list.append(i)
         return col_name_list
 
-    # split data by col_name_list
     def get_split_data(self, data, col_name_list):
+        """
+        Split data by col_name_list
+
+        Parameters
+        ----------
+        data
+        col_name_list
+
+        Returns
+        -------
+
+        """
         # run analysis
         if len(col_name_list) == 1:
             data_1 = data.loc[:col_name_list[0]-1,]
@@ -302,10 +313,10 @@ class VMPropsManager(object):
             string = chr(65 + remainder) + string
         return string
     
-    def main_table_to_so_converter(self, df, country_col=None, skipcols_front=None, skipcols_end=None):
+    def main_table_to_so_converter(self, df, main_cols=None, skipcols_front=None, skipcols_end=None):
         # load parameters if not specified
-        if country_col is None:
-            country_col = self.__parameters['names']['country_col']
+        if main_cols is None:
+            main_cols = self.__parameters['names']['main_cols']
         if skipcols_front is None:
             skipcols_front = self.__parameters['shape']['props_header_start_col']
         if skipcols_end is None:
@@ -315,25 +326,23 @@ class VMPropsManager(object):
         props_column_names = list(df.iloc[:, skipcols_front:skipcols_end].columns)
         # melt all props into country
         df['XRow'] = df.index + 1
-        so_table = pd.melt(df[['XRow', country_col] + props_column_names], id_vars=['XRow', country_col],
+        so_table = pd.melt(df[main_cols + ['XRow'] + props_column_names], id_vars=main_cols + ['XRow'],
                            value_vars=props_column_names)
         # rename column names to fixed format
-        so_table.columns = ['XRow', country_col, 'VM PROPS', 'Qty']
+        so_table.columns = main_cols + ['XRow', 'VM PROPS', 'Qty']
         # order columns
-        so_table = so_table[[country_col, 'VM PROPS', 'Qty', 'XRow']]
+        so_table = so_table[main_cols + ['VM PROPS', 'Qty', 'XRow']]
         # drop props with no qty
         so_table['Qty'] = pd.to_numeric(so_table['Qty'], errors='coerce')
         so_table = so_table[so_table['Qty'] > 0]
-        # rename total rows
-        so_table.loc[so_table[country_col] == 0, country_col] = 'TOTAL'
-        so_table.loc[so_table[country_col] == 0, country_col] = '0'
         # calculate cell location (of original excel)
         max_rows = len(df)
-        max_ind = max(df.index)
-        min_ind = min(df.index)
         so_table['XCol'] = [skipcols_front + 1 + (i // max_rows) for i in so_table.index]  # quotient
         so_table['XCol'] = so_table['XCol'].apply(lambda x: self.get_excel_col_from_int(x))
         so_table['XCell'] = so_table['XCol'] + so_table['XRow'].astype('str')
+        # rename total rows
+        for col in main_cols:
+            so_table.loc[so_table['XRow'] % (max(df.index) + 1) == 0, col] = 'TOTAL'
         # return so format table
         return so_table.reset_index(drop='True')
 
