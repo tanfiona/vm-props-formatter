@@ -26,7 +26,7 @@ class VMPropsManager(object):
             "sheet_name": "",
             "country_col": "COUNTRY NAME",
             "store_col": "STORE NAME",
-            "main_cols": ["COUNTRY NAME", "STORE NAME"],
+            "main_cols": ["COUNTRY NAME"],
             "entity_list": ["CKS", "CKI", "CKC"]
         }
     }
