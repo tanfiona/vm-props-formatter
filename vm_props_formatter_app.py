@@ -28,7 +28,7 @@ current_save_settings_clicks = 0
 current_load_default_settings_clicks = 0
 so_format_data = pd.DataFrame()
 checked_data = pd.DataFrame()
-report_filename = 'VM Props Analysis Report.xlsx'
+entity = None
 settings = {}
 settings_path = 'settings/default_settings.json'
 outputs_path = 'outputs/'
@@ -938,6 +938,7 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
     global so_format_data
     global checked_data
     global settings
+    global sheet_name
     
     so_format_datatable_data = {}
     so_format_datatable_columns = []
@@ -963,7 +964,7 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
             # Run analysis
             print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Updating the settings ...')
 
-            data, data_sh_colours = vm.load_dataset(vm_props_order_summary_file, vm_props_order_summary_filename)
+            data, data_sh_colours, sheet_name = vm.load_dataset(vm_props_order_summary_file, vm_props_order_summary_filename)
             main_data = vm.get_main_data(data)
             main_data = vm.dropna_rows_cols(main_data)
             # load parameters if not specified
@@ -1025,6 +1026,7 @@ def download_report():
     """
     global so_format_data
     global checked_data
+    global sheet_name
 
     def format_and_save_excel(summary_df, so_table, keep_cols=None):
 
@@ -1069,10 +1071,12 @@ def download_report():
         return buffer
 
     buffer = format_and_save_excel(checked_data, so_format_data)
+    vm = VMPropsManager()
+
     return send_file(
         buffer,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        attachment_filename=report_filename,
+        attachment_filename=vm.get_file_name(sheet_name),
         as_attachment=True,
         cache_timeout=0
     )

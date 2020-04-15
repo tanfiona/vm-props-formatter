@@ -79,9 +79,11 @@ class VMPropsManager(object):
         return self.__defaults
 
     def get_entity(self, file_name):
+        entity = None
         for i in self.__parameters['names']['entity_list']:
             if i in file_name:
-                return i
+                entity = i
+        return entity
 
     def load_dataset(self, file_path, file_name, sheet_name=None):
         """
@@ -112,10 +114,10 @@ class VMPropsManager(object):
             data = pd.read_excel(file_path, sheet_name, index_col=None, header=None)
             wb = openpyxl.load_workbook(file_path, data_only=True)
             sh = wb[sheet_name]
-            return data, sh
+            return data, sh, sheet_name
         except:
             print('[Error]  Incorrect file format, table columns, or table contents')
-            return None, None
+            return None, None, sheet_name
 
     def get_main_data(self, data, skiprows = None):
         """
@@ -346,3 +348,14 @@ class VMPropsManager(object):
             for colour, country in zip(so_table['Cell_Colour'], so_table[country_col])
         ]
         return so_table
+
+    def get_file_name(self, sheet_name=None):
+        # load parameters if not specified
+        if sheet_name is None:
+            sheet_name = self.__parameters['names']['sheet_name'] # default settings
+        # run analysis
+        if sheet_name is not None:
+            report_filename = str(sheet_name) + ' VM Props Analysis Report.xlsx'
+        else:
+            report_filename = 'VM Props Analysis Report.xlsx'
+        return report_filename
