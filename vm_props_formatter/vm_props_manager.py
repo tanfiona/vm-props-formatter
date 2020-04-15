@@ -230,11 +230,7 @@ class VMPropsManager(object):
         country_col_2_ind = data.columns.get_loc(country_col) + 1
         data[country_col] = data.iloc[:, country_col_2_ind].fillna(data[country_col])
         # fill na with above country
-        for i in range(1, len(data)):
-            value = data[country_col].iloc[i]
-            prev_value = data[country_col].iloc[i - 1]
-            if pd.isna(value):
-                data[country_col].iloc[i] = prev_value
+        data.loc[:, country_col] = data.loc[:, country_col].ffill()
         return data
 
     def shorten_table_w_max_rows(self, data, max_rows=None):
