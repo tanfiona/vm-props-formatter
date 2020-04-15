@@ -27,7 +27,10 @@ class VMPropsManager(object):
             "country_col": "COUNTRY NAME",
             "store_col": "STORE NAME",
             "main_cols": ["COUNTRY NAME"],
-            "entity_list": ["CKS", "CKI", "CKC"]
+            "entity_list": ["CKS", "CKI", "CKC"],
+            "drop_rows_with": {
+                "NO": ["Total:"]
+            }
         }
     }
 
@@ -220,7 +223,7 @@ class VMPropsManager(object):
             data_3 = data.loc[col_name_list[1]-1:,]
             return data_1, data_2, data_3
 
-    def clean_main_data(self, data, country_col=None):
+    def clean_main_data(self, data, country_col=None, drop_rows_with=None):
         """
         
         Parameters
@@ -235,10 +238,13 @@ class VMPropsManager(object):
         # load parameters if not specified
         if country_col is None:
             country_col = self.__parameters['names']['country_col']
+        if drop_rows_with is None:
+            drop_rows_with = self.__parameters['names']['drop_rows_with']
         # run analysis
         # drop 'duplicate' rows where totals are dupl
-        # hard-coded!!!!
-        data = data[data['NO'] != 'Total:']
+        # not available in UI settings yet
+        for col, item in zip(drop_rows_with.keys(), drop_rows_with.values()):
+            data = data[~data[col].isin(item)]
         # format country
         country_col_2_ind = data.columns.get_loc(country_col) + 1
         data[country_col] = data.iloc[:, country_col_2_ind].fillna(data[country_col])
