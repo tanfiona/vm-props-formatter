@@ -88,7 +88,7 @@ class VMPropsManager(object):
                 entity = i
         return entity
 
-    def load_dataset(self, file_path, file_name, sheet_name=None, sheet_loc=None, header=None):
+    def load_dataset(self, file_path, file_name, file_only=False, sheet_name=None, sheet_loc=None, header=None):
         """
         Loads excel files into data and colour information
         
@@ -96,6 +96,7 @@ class VMPropsManager(object):
         ----------
         file_path: byte
         file_name: str
+        file_only: bool
         sheet_name: str
         sheet_loc: int
 
@@ -117,12 +118,18 @@ class VMPropsManager(object):
                 print('[Status] Sheet name not specified. Took based on file name entity name: "%s"' % sheet_name)
             print('[Status] Loading File: "%s";' % file_name, '"Loading Sheet: "%s"' % sheet_name)
             data = pd.read_excel(file_path, sheet_name, index_col=None, header=header)
-            wb = openpyxl.load_workbook(file_path, data_only=True)
-            sh = wb[sheet_name]
-            return data, sh, sheet_name
+            if not file_only:
+                wb = openpyxl.load_workbook(file_path, data_only=True)
+                sh = wb[sheet_name]
+                return data, sh, sheet_name
+            else:
+                return data
         except:
             print('[Error]  Incorrect file format, table columns, or table contents')
-            return None, None, sheet_name
+            if not file_only:
+                return None, None, sheet_name
+            else:
+                return None
 
     def get_main_data(self, data, skiprows = None):
         """
