@@ -964,7 +964,6 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
             vm = VMPropsManager(settings)
             # Run analysis
             print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Updating the settings ...')
-
             data, data_sh_colours, sheet_name = vm.load_dataset(vm_props_order_summary_file, vm_props_order_summary_filename)
             main_data = vm.get_main_data(data)
             main_data = vm.dropna_rows_cols(main_data)
