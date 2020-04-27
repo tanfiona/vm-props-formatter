@@ -947,7 +947,8 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
     download_report_output = []
     are_outputs_available = False
 
-    if start_analysis_clicks > 0 and start_analysis_clicks > current_start_analysis_clicks:
+    if None not in (vm_props_order_summary_content, vm_props_order_summary_filename, start_analysis_clicks) \
+            and start_analysis_clicks > 0 and start_analysis_clicks > current_start_analysis_clicks:
         filename = settings_path
         settings = read_json(filename)
         print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Updating the settings ...')
@@ -981,6 +982,17 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
             checked_data = vm.main_and_summary_checker(df, summary_df)
             so_table = vm.main_table_to_so_converter(df)
             so_format_data = vm.get_cell_colour_col(so_table, data_sh_colours)
+            # add VM Batch Props Tag if file is uploaded / file exists
+            if None not in (props_batch_content, props_batch_content_filename):
+                props_batch_content_file = io.BytesIO(base64.b64decode(props_batch_content.split(',')[-1]))
+                b_data, b_data_sh_colours, b_sheet_name = vm.load_dataset(
+                    props_batch_content_file, props_batch_content_filename,
+                    sheet_name=None, sheet_loc=0, header=0)
+                print(list(so_format_data))
+                print(list(b_data))
+                so_format_data = so_format_data.merge(b_data.apply(lambda x: x.astype(str).str.upper()),
+                                                      how='left', right_on='Product Name', left_on='VM PROPS')
+                del(so_format_data['Product Name'])
         # Format outputs
         if so_format_data is not None and not so_format_data.empty:
             # table not showing until second click
@@ -1004,7 +1016,7 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
 
         # Update current clicks
         current_start_analysis_clicks = start_analysis_clicks
-        
+
     return so_format_datatable_data, so_format_datatable_columns, [], \
            checked_datatable_data, checked_datatable_columns, [], download_report_output
 

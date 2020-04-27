@@ -88,7 +88,7 @@ class VMPropsManager(object):
                 entity = i
         return entity
 
-    def load_dataset(self, file_path, file_name, sheet_name=None):
+    def load_dataset(self, file_path, file_name, sheet_name=None, sheet_loc=None, header=None):
         """
         Loads excel files into data and colour information
         
@@ -97,6 +97,7 @@ class VMPropsManager(object):
         file_path: byte
         file_name: str
         sheet_name: str
+        sheet_loc: int
 
         Returns
         -------
@@ -105,16 +106,17 @@ class VMPropsManager(object):
 
         """
         # load parameters if not specified
+        if sheet_loc is not None:
+            sheet_name = pd.ExcelFile(file_path).sheet_names[sheet_loc]
+            print('[Status] Sheet name not specified. Took sheet by loc: ', sheet_name)
         if sheet_name is None:
             sheet_name = self.__parameters['names']['sheet_name']
         try:
             if sheet_name is "": # not specified by user either
                 sheet_name = self.get_entity(file_name)
                 print('[Status] Sheet name not specified. Took based on file name entity name: "%s"' % sheet_name)
-            #     sheet_name = pd.ExcelFile(file_path).sheet_names[0]
-            #     print('[Status] Sheet name not specified. Took first sheet: ', sheet_name)
             print('[Status] Loading File: "%s";' % file_name, '"Loading Sheet: "%s"' % sheet_name)
-            data = pd.read_excel(file_path, sheet_name, index_col=None, header=None)
+            data = pd.read_excel(file_path, sheet_name, index_col=None, header=header)
             wb = openpyxl.load_workbook(file_path, data_only=True)
             sh = wb[sheet_name]
             return data, sh, sheet_name
