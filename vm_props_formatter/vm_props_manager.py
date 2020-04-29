@@ -47,10 +47,11 @@ class VMPropsManager(object):
         -------
         None
         """
-        self.__parameters = copy.deepcopy(self.__defaults)
         # Set defined parameter values if present
         if parameters is not None:
-            self.__parameters.update(parameters)
+            self.__parameters = parameters
+        else:
+            self.__parameters = copy.deepcopy(self.__defaults)
 
     def update_parameters(self, parameters):
         """
@@ -79,7 +80,7 @@ class VMPropsManager(object):
         parameters : dict
             Default parameters
         """
-        return self.__defaults
+        return copy.deepcopy(self.__defaults)
 
     def get_entity(self, file_name):
         entity = None
