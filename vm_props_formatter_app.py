@@ -30,15 +30,18 @@ so_format_data = pd.DataFrame()
 checked_data = pd.DataFrame()
 entity = None
 settings = {}
-settings_path = 'settings/default_settings.json'
+settings_path = 'settings/'
 outputs_path = 'outputs/'
 image_filename = 'settings/ck_logo.png'
 encoded_image = base64.b64encode(open(image_filename, 'rb').read())
+analysis_types = [{'label': i, 'value': i} for i in ['Regular', 'Seasonal']]
 hover_text = {
     'settings-shape-main-header-row-text':
         ['e.g. Row 8 where the main data row starts'],
     'settings-shape-props-header-start-col-text':
         ['e.g. Col 6 or F where the props column starts at BIG BAG STAND'],
+    'settings-shape-number-of-header-rows-text':
+        ['e.g. How many rows does the main top header consist of'],
     'settings-shape-props-header-tally-first-text':
         ['e.g. How many columns to tally from the first props col stand to find summary below'],
     'settings-shape-no-summary-table-rows-text':
@@ -51,6 +54,8 @@ hover_text = {
         ['If left as blank, app auto-reads sheet name that has any of the entity names indicated below'],
     'settings-names-store-col-text':
         ['Column name that represents Store'],
+    'settings-names-storesap-col-text':
+        ['Column name that represents SAP Code of Stores'],
     'settings-names-country-col-text':
         ['Column name that represents Country'],
     'settings-names-main-cols-text':
@@ -338,6 +343,12 @@ app.layout = html.Div(
                                 html.Div(
                                     id='analysis-input-area',
                                     children=[
+                                        html.P('Analysis Type'),
+                                        dcc.Dropdown(
+                                            id='analysis-type-dropdown',
+                                            options=analysis_types,
+                                            value=analysis_types[0]['value']
+                                        ),
                                         html.P('VM Props Order Summary File'),
                                         dcc.Upload(
                                             id='upload-vm-props-order-summary',
@@ -422,7 +433,12 @@ app.layout = html.Div(
                                 html.Div(
                                     id='settings-input-area',
                                     children=[
-                                        html.P(''),
+                                        html.P('Analysis Type'),
+                                        dcc.Dropdown(
+                                            id='settings-type-dropdown',
+                                            options=analysis_types,
+                                            value=analysis_types[0]['value']
+                                        ),
                                         html.Div(
                                             children=[
                                                 html.Button(
@@ -498,6 +514,15 @@ app.layout = html.Div(
                                                         ),
                                                         generate_slider(
                                                             'settings-shape-props-header-start-col-slider'
+                                                        ),
+                                                        html.P(
+                                                            id='settings-shape-number-of-header-rows-text'
+                                                        ),
+                                                        generate_hover_text(
+                                                            'settings-shape-number-of-header-rows-text'
+                                                        ),
+                                                        generate_slider(
+                                                            'settings-shape-number-of-header-rows-slider'
                                                         ),
                                                         html.P(
                                                             id='settings-shape-props-header-tally-first-text'
@@ -581,6 +606,18 @@ app.layout = html.Div(
                                                         ),
                                                         dcc.Input(
                                                             id='settings-names-store-col-input',
+                                                            type='text',
+                                                            placeholder='input text',
+                                                            debounce=True
+                                                        ),
+                                                        html.P(
+                                                            id='settings-names-storesap-col-text'
+                                                        ),
+                                                        generate_hover_text(
+                                                            'settings-names-storesap-col-text'
+                                                        ),
+                                                        dcc.Input(
+                                                            id='settings-names-storesap-col-input',
                                                             type='text',
                                                             placeholder='input text',
                                                             debounce=True
@@ -712,22 +749,24 @@ def display_props_batch_filename(props_batch_content, props_batch_filename):
     ],
     [
         Input('settings-names-country-col-input', 'value'),
-        Input('settings-names-store-col-input', 'value')
+        Input('settings-names-store-col-input', 'value'),
+        Input('settings-names-storesap-col-input', 'value')
     ]
 )
-def update_settings_dropdown(country_col, store_col):
+def update_settings_dropdown(country_col, store_col, storesap_col):
     global entity_list
-    if country_col is not None and store_col is not None:
-        main_cols = [{'label': x, 'value': x} for x in [country_col, store_col]]
-        entities = [{'label': x, 'value': x} for x in entity_list]
-        return main_cols, entities
+    if None not in (country_col, store_col, storesap_col):
+        main_cols = [{'label': x, 'value': x} for x in [country_col, store_col, storesap_col]]
     else:
-        return [], []
+        main_cols = []
+    entities = [{'label': x, 'value': x} for x in entity_list]
+    return main_cols, entities
 
 @app.callback(
     [
         Output('settings-shape-main-header-row-text', 'children'),
         Output('settings-shape-props-header-start-col-text', 'children'),
+        Output('settings-shape-number-of-header-rows-text', 'children'),
         Output('settings-shape-props-header-tally-first-text', 'children'),
         Output('settings-shape-no-summary-table-rows-text', 'children'),
         Output('settings-shape-summary-table-sum-row-text', 'children'),
@@ -735,12 +774,14 @@ def update_settings_dropdown(country_col, store_col):
         Output('settings-names-sheet-name-text', 'children'),
         Output('settings-names-country-col-text', 'children'),
         Output('settings-names-store-col-text', 'children'),
+        Output('settings-names-storesap-col-text', 'children'),
         Output('settings-names-main-cols-text', 'children'),
         Output('settings-names-entity-list-text', 'children')
      ],
     [
         Input('settings-shape-main-header-row-slider', 'value'),
         Input('settings-shape-props-header-start-col-slider', 'value'),
+        Input('settings-shape-number-of-header-rows-slider', 'value'),
         Input('settings-shape-props-header-tally-first-slider', 'value'),
         Input('settings-shape-no-summary-table-rows-slider', 'value'),
         Input('settings-shape-summary-table-sum-row-slider', 'value'),
@@ -748,18 +789,21 @@ def update_settings_dropdown(country_col, store_col):
         Input('settings-names-sheet-name-input', 'value'),
         Input('settings-names-country-col-input', 'value'),
         Input('settings-names-store-col-input', 'value'),
+        Input('settings-names-storesap-col-input', 'value'),
         Input('settings-names-main-cols-dropdown', 'value'),
         Input('settings-names-entity-list-dropdown', 'value')
     ]
 )
-def update_settings(main_header_row, props_header_start_col, props_header_tally_first, no_summary_table_rows, 
-                    summary_table_sum_row, props_header_end_col, sheet_name, country_col, store_col, main_cols, entity_list):
+def update_settings(main_header_row, props_header_start_col, number_of_header_rows, props_header_tally_first,
+                    no_summary_table_rows, summary_table_sum_row, props_header_end_col, sheet_name, country_col,
+                    store_col, storesap_col, main_cols, entity_list):
     # load settings
     global settings
     
     # define texts
     main_header_row_text = 'SkipRows to Main Header'
     props_header_start_col_text = 'SkipCols to First Props Column'
+    number_of_header_rows_text = 'Number of Header Rows'
     props_header_tally_first_text = 'Number of First X Props Columns to Tally'
     no_summary_table_rows_text = 'Number of Rows of Summary Table'
     summary_table_sum_row_text = 'Summary Table Sum Row Number '
@@ -767,6 +811,7 @@ def update_settings(main_header_row, props_header_start_col, props_header_tally_
     sheet_name_text = 'Sheet to Read From'
     country_col_text = 'Column name of Country'
     store_col_text = 'Column name of Stores'
+    storesap_col_text = 'Column name of Store SAP Code'
     main_cols_text = 'Main Columns'
     entity_list_text = 'Entities to find default sheet name'
     
@@ -775,6 +820,8 @@ def update_settings(main_header_row, props_header_start_col, props_header_tally_
         main_header_row_text += ': %s'%main_header_row
     if props_header_start_col is not None:
         props_header_start_col_text += ': %s'%props_header_start_col
+    if number_of_header_rows_text is not None:
+        number_of_header_rows_text += ': %s'%number_of_header_rows
     if props_header_tally_first is not None:
         props_header_tally_first_text += ': %s'%props_header_tally_first
     if no_summary_table_rows is not None:
@@ -789,6 +836,8 @@ def update_settings(main_header_row, props_header_start_col, props_header_tally_
         country_col_text += ': %s'%country_col
     if store_col is not None:
         store_col_text += ': %s'%store_col
+    if storesap_col is not None:
+        storesap_col_text += ': %s'%storesap_col
     if main_cols is not None:
         main_cols_text += ': %s'%main_cols
     if entity_list is not None:
@@ -798,6 +847,7 @@ def update_settings(main_header_row, props_header_start_col, props_header_tally_
     if len(settings) > 0:
         settings['shape']['main_header_row'] = main_header_row
         settings['shape']['props_header_start_col'] = props_header_start_col
+        settings['shape']['number_of_header_rows'] = number_of_header_rows
         settings['shape']['props_header_tally_first'] = props_header_tally_first
         settings['shape']['no_summary_table_rows'] = no_summary_table_rows
         settings['shape']['summary_table_sum_row'] = summary_table_sum_row
@@ -805,26 +855,31 @@ def update_settings(main_header_row, props_header_start_col, props_header_tally_
         settings['names']['sheet_name'] = sheet_name
         settings['names']['country_col'] = country_col
         settings['names']['store_col'] = store_col
+        settings['names']['storesap_col'] = storesap_col
         settings['names']['main_cols'] = main_cols
         settings['names']['entity_list'] = entity_list
         
     # return texts
-    return main_header_row_text, props_header_start_col_text, props_header_tally_first_text, no_summary_table_rows_text, \
-           summary_table_sum_row_text, props_header_end_col_text, sheet_name_text, country_col_text, store_col_text, \
-           main_cols_text, entity_list_text
+    return main_header_row_text, props_header_start_col_text, number_of_header_rows_text, props_header_tally_first_text, \
+           no_summary_table_rows_text, summary_table_sum_row_text, props_header_end_col_text, sheet_name_text, \
+           country_col_text, store_col_text, storesap_col_text, main_cols_text, entity_list_text
 
 @app.callback(
     Output('settings-placeholder', 'children'),
     [
-        Input('settings-save-button', 'n_clicks')
+        Input('settings-save-button', 'n_clicks'),
+        Input('settings-type-dropdown', 'value')
     ]
 )
-def save_settings(save_settings_clicks):
+def save_settings(save_settings_clicks, analysis_type):
     """"""
     global current_save_settings_clicks
     global settings
     if save_settings_clicks > current_save_settings_clicks:
-        filename = settings_path
+        if analysis_type == 'Regular':
+            filename = settings_path + 'regular_settings.json'
+        elif analysis_type == 'Seasonal':
+            filename = settings_path + 'seasonal_settings.json'
         write_json(settings, filename)
         current_save_settings_clicks = save_settings_clicks
     return None
@@ -833,6 +888,7 @@ def save_settings(save_settings_clicks):
     [
         Output('settings-shape-main-header-row-slider', 'value'),
         Output('settings-shape-props-header-start-col-slider', 'value'),
+        Output('settings-shape-number-of-header-rows-slider', 'value'),
         Output('settings-shape-props-header-tally-first-slider', 'value'),
         Output('settings-shape-no-summary-table-rows-slider', 'value'),
         Output('settings-shape-summary-table-sum-row-slider', 'value'),
@@ -840,22 +896,27 @@ def save_settings(save_settings_clicks):
         Output('settings-names-sheet-name-input', 'value'),
         Output('settings-names-country-col-input', 'value'),
         Output('settings-names-store-col-input', 'value'),
+        Output('settings-names-storesap-col-input', 'value'),
         Output('settings-names-main-cols-dropdown', 'value'),
         Output('settings-names-entity-list-dropdown', 'value')
     ]
     ,
     [
         Input('settings-load-button', 'n_clicks'),
-        Input('default-settings-load-button', 'n_clicks')
+        Input('default-settings-load-button', 'n_clicks'),
+        Input('settings-type-dropdown', 'value')
     ]
 )
-def load_settings(load_settings_clicks, load_default_settings_clicks):
+def load_settings(load_settings_clicks, load_default_settings_clicks, analysis_type):
     global current_load_settings_clicks
     global current_load_default_settings_clicks
     global settings
     if load_settings_clicks is not None and load_settings_clicks > 0 and load_settings_clicks > current_load_settings_clicks:
         print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Loading the settings ...')
-        filename = settings_path
+        if analysis_type == 'Regular':
+            filename = settings_path + 'regular_settings.json'
+        elif analysis_type == 'Seasonal':
+            filename = settings_path + 'seasonal_settings.json'
         values = read_json(filename)
         current_load_settings_clicks = load_settings_clicks
     elif load_default_settings_clicks is not None and load_default_settings_clicks > 0 and load_default_settings_clicks > current_load_default_settings_clicks:
@@ -870,6 +931,7 @@ def load_settings(load_settings_clicks, load_default_settings_clicks):
         return \
             settings['shape']['main_header_row'],\
             settings['shape']['props_header_start_col'], \
+            settings['shape']['number_of_header_rows'], \
             settings['shape']['props_header_tally_first'], \
             settings['shape']['no_summary_table_rows'], \
             settings['shape']['summary_table_sum_row'], \
@@ -877,10 +939,11 @@ def load_settings(load_settings_clicks, load_default_settings_clicks):
             settings['names']['sheet_name'], \
             settings['names']['country_col'], \
             settings['names']['store_col'], \
+            settings['names']['storesap_col'], \
             settings['names']['main_cols'], \
             settings['names']['entity_list']
     else:
-        return None, None, None, None, None, None, None, None, None, [], []
+        return None, None, None, None, None, None, None, None, None, None, None, [], []
 
 
 @app.callback(
@@ -897,7 +960,8 @@ def load_settings(load_settings_clicks, load_default_settings_clicks):
         Input('upload-vm-props-order-summary', 'contents'),
         Input('upload-country-whs-names', 'contents'),
         Input('upload-props-batch-names', 'contents'),
-        Input('start-order-check-button', 'n_clicks')
+        Input('start-order-check-button', 'n_clicks'),
+        Input('settings-type-dropdown', 'value')
     ],
     [
         State('upload-vm-props-order-summary', 'filename'),
@@ -906,7 +970,7 @@ def load_settings(load_settings_clicks, load_default_settings_clicks):
     ]
 )
 def run_analysis(vm_props_order_summary_content, country_whs_content, props_batch_content, start_analysis_clicks,
-                vm_props_order_summary_filename, country_whs_content_filename, props_batch_content_filename):
+                 analysis_type, vm_props_order_summary_filename, country_whs_content_filename, props_batch_content_filename):
     """
     Perform checking of the files
 
@@ -949,7 +1013,10 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
 
     if None not in (vm_props_order_summary_content, vm_props_order_summary_filename, start_analysis_clicks) \
             and start_analysis_clicks > 0 and start_analysis_clicks > current_start_analysis_clicks:
-        filename = settings_path
+        if analysis_type == 'Regular':
+            filename = settings_path + 'regular_settings.json'
+        elif analysis_type == 'Seasonal':
+            filename = settings_path + 'seasonal_settings.json'
         settings = read_json(filename)
         print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Updating the settings ...')
         
@@ -964,7 +1031,8 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
             vm = VMPropsManager(settings)
             # Run analysis
             print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Updating the settings ...')
-            data, data_sh_colours, sheet_name = vm.load_dataset(vm_props_order_summary_file, vm_props_order_summary_filename)
+            data, data_sh_colours, sheet_name = vm.load_dataset(
+                vm_props_order_summary_file, vm_props_order_summary_filename, import_merged=True)
             main_data = vm.get_main_data(data)
             main_data = vm.dropna_rows_cols(main_data)
             # load parameters if not specified
@@ -1009,9 +1077,9 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
                     href='/downloads/'
                 )
             ]
-
         # Update current clicks
         current_start_analysis_clicks = start_analysis_clicks
+        print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Analysis complete!')
 
     return so_format_datatable_data, so_format_datatable_columns, [], \
            checked_datatable_data, checked_datatable_columns, [], download_report_output

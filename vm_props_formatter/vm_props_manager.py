@@ -2,6 +2,7 @@ import copy
 import openpyxl
 import pandas as pd
 import numpy as np
+import xlrd
 #import glob
 #import os
 #from .utils.file_organizer import check_create_directory
@@ -16,16 +17,18 @@ class VMPropsManager(object):
             "title_row": 4,
             "title_col": 1,
             "main_header_row": 7,
+            "number_of_header_rows": 1,
             "props_header_start_col": 5,
             "props_header_tally_first": 5,
             "no_summary_table_rows": 3,
             "summary_table_sum_row": 1,
-            "props_header_end_col": -1,
+            "props_header_end_col": -1
         },
         "names": {
             "sheet_name": "",
             "country_col": "COUNTRY NAME",
             "store_col": "STORE NAME",
+            "storesap_col": "",
             "main_cols": ["COUNTRY NAME"],
             "entity_list": ["CKS", "CKI", "CKC"],
             "drop_rows_with": {
@@ -89,7 +92,8 @@ class VMPropsManager(object):
                 entity = i
         return entity
 
-    def load_dataset(self, file_path, file_name, file_only=False, sheet_name=None, sheet_loc=None, header=None):
+    def load_dataset(self, file_path, file_name, file_only=False, sheet_name=None, sheet_loc=None,
+                     header=None, import_merged=False):
         """
         Loads excel files into data and colour information
         
@@ -107,18 +111,40 @@ class VMPropsManager(object):
         sh : object
 
         """
-        # load parameters if not specified
-        if sheet_loc is not None:
-            sheet_name = pd.ExcelFile(file_path).sheet_names[sheet_loc]
-            print('[Status] Sheet name not specified. Took sheet by loc: ', sheet_name)
         if sheet_name is None:
-            sheet_name = self.__parameters['names']['sheet_name']
+            if sheet_loc is not None:  # load sheet name as location if specified
+                sheet_name = pd.ExcelFile(file_path).sheet_names[sheet_loc]
+                print('[Status] Sheet name not specified. Took sheet by loc: ', sheet_name)
+            else:  # load sheet name from parameters
+                sheet_name = self.__parameters['names']['sheet_name']
+        if sheet_name is "":  # if loaded but not specified by user either
+            sheet_name = self.get_entity(file_name)
+            print('[Status] Sheet name not specified. Took based on file name entity name: "%s"' % sheet_name)
         try:
-            if sheet_name is "": # not specified by user either
-                sheet_name = self.get_entity(file_name)
-                print('[Status] Sheet name not specified. Took based on file name entity name: "%s"' % sheet_name)
             print('[Status] Loading File: "%s";' % file_name, '"Loading Sheet: "%s"' % sheet_name)
-            data = pd.read_excel(file_path, sheet_name, index_col=None, header=header)
+            if import_merged:
+                data = pd.read_excel(file_path, sheet_name, index_col=None, header=header)
+            else:
+                # read file data by sheet_name
+                book = xlrd.open_workbook(file_path+file_name)
+                sheet = book.sheet_by_name(sheet_name)
+                # get and overwrite merged cells
+                data = []
+                for row_index in range(sheet.nrows):
+                    row = []
+                    for col_index in range(sheet.ncols):
+                        valor = sheet.cell(row_index, col_index).value
+                        if valor == '':
+                            for crange in sheet.merged_cells:
+                                rlo, rhi, clo, chi = crange
+                                if rlo <= row_index < rhi and clo <= col_index < chi:
+                                    valor = sheet.cell(rlo, clo).value
+                                    break
+                        row.append(valor)
+                    data.append(row)
+                data = pd.DataFrame(data)
+                print(data)
+            # read colours info
             if not file_only:
                 wb = openpyxl.load_workbook(file_path, data_only=True)
                 sh = wb[sheet_name]
@@ -132,7 +158,7 @@ class VMPropsManager(object):
             else:
                 return None
 
-    def get_main_data(self, data, skiprows = None):
+    def get_main_data(self, data, skiprows = None, headerrows= None):
         """
         Shortens and re-header data
 
@@ -143,6 +169,9 @@ class VMPropsManager(object):
         skiprows: int
             Number of rows to skip to first header row
             E.g. skiprows = 7 if the main data header is on Row '8'
+        headerrows: int
+            Number of rows that make up headers
+            E.g. 2 if both window props + set A both are header rows
 
         Returns
         -------
@@ -151,6 +180,8 @@ class VMPropsManager(object):
         # load parameters if not specified
         if skiprows is None:
             skiprows = self.__parameters['shape']['main_header_row']
+        if headerrows is None:
+            headerrows = self.__parameters['shape']['number_of_header_rows']
         # run analysis
         new_header = data.iloc[skiprows]
         data = data.iloc[skiprows+1:,]
@@ -258,7 +289,7 @@ class VMPropsManager(object):
         # format country
         country_col_2_ind = data.columns.get_loc(country_col) + 1
         data[country_col] = data.iloc[:, country_col_2_ind].fillna(data[country_col])
-        # fill na with above country
+        # fill na with above country (some not merged properly)
         data.loc[:, country_col] = data.loc[:, country_col].ffill()
         return data
 

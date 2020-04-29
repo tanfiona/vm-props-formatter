@@ -1,0 +1,24 @@
+{
+    "shape": {
+        "title_row": 4,
+        "title_col": 1,
+        "main_header_row": 7,
+        "number_of_header_rows": 2,
+        "props_header_start_col": 5,
+        "props_header_tally_first": 5,
+        "no_summary_table_rows": 3,
+        "summary_table_sum_row": 1,
+        "props_header_end_col": -1
+    },
+    "names": {
+        "sheet_name": "",
+        "country_col": "Country Name",
+        "store_col": "STORE NAME",
+        "storesap_col": "SHOP SAP CODE",
+        "main_cols": ["Country Name", "STORE NAME", "SHOP SAP CODE"],
+        "entity_list": ["CKS","CKI","CKC"],
+        "drop_rows_with": {
+            "NO": ["Total:"]
+        }
+    }
+}
