@@ -92,18 +92,18 @@ class VMPropsManager(object):
                 entity = i
         return entity
 
-    def load_dataset(self, file_path, file_name, file_only=False, sheet_name=None, sheet_loc=None,
-                     header=None, import_merged=False):
+    def load_dataset(self, file_path, file_name, file_only=False, sheet_name=None, header=None, import_merged=False):
         """
         Loads excel files into data and colour information
         
         Parameters
         ----------
-        file_path: byte
-        file_name: str
-        file_only: bool
-        sheet_name: str
-        sheet_loc: int
+        file_path : byte
+        file_name : str
+        file_only : bool
+        sheet_name : str
+        header : int
+        import_merged : bool
 
         Returns
         -------
@@ -111,52 +111,65 @@ class VMPropsManager(object):
         sh : object
 
         """
+        # load sheet name from parameters
         if sheet_name is None:
-            if sheet_loc is not None:  # load sheet name as location if specified
-                sheet_name = pd.ExcelFile(file_path).sheet_names[sheet_loc]
-                print('[Status] Sheet name not specified. Took sheet by loc: ', sheet_name)
-            else:  # load sheet name from parameters
-                sheet_name = self.__parameters['names']['sheet_name']
-        if sheet_name is "":  # if loaded but not specified by user either
-            sheet_name = self.get_entity(file_name)
-            print('[Status] Sheet name not specified. Took based on file name entity name: "%s"' % sheet_name)
-        try:
-            print('[Status] Loading File: "%s";' % file_name, '"Loading Sheet: "%s"' % sheet_name)
-            if import_merged:
-                data = pd.read_excel(file_path, sheet_name, index_col=None, header=header)
-            else:
-                # read file data by sheet_name
-                book = xlrd.open_workbook(file_path+file_name)
-                sheet = book.sheet_by_name(sheet_name)
-                # get and overwrite merged cells
-                data = []
-                for row_index in range(sheet.nrows):
-                    row = []
-                    for col_index in range(sheet.ncols):
-                        valor = sheet.cell(row_index, col_index).value
-                        if valor == '':
-                            for crange in sheet.merged_cells:
-                                rlo, rhi, clo, chi = crange
-                                if rlo <= row_index < rhi and clo <= col_index < chi:
-                                    valor = sheet.cell(rlo, clo).value
-                                    break
-                        row.append(valor)
-                    data.append(row)
-                data = pd.DataFrame(data)
-                print(data)
-            # read colours info
-            if not file_only:
-                wb = openpyxl.load_workbook(file_path, data_only=True)
-                sh = wb[sheet_name]
-                return data, sh, sheet_name
-            else:
-                return data
-        except:
-            print('[Error]  Incorrect file format, table columns, or table contents')
-            if not file_only:
-                return None, None, sheet_name
-            else:
-                return None
+            sheet_name = self.__parameters['names']['sheet_name']
+        # open file
+        book = pd.ExcelFile(file_path).book
+        # take first, if sheet_name is blank/ not specified
+        if sheet_name == '':
+            # check all sheet names in book
+            sheets = book.sheets()
+            visible_sheets = []
+            for sheet in sheets:
+                if sheet.visibility == 0:  # sheet is visible
+                    visible_sheets.append(sheet.name)
+            # take first visible sheet
+            sheet_name = str(visible_sheets[0])
+            print('[Status] Sheet name not specified. Took sheet by loc: ', sheet_name)
+        print('[Status] Loading File: "%s";' % file_name, '"Loading Sheet: "%s"' % sheet_name)
+        if not import_merged:
+            data = pd.read_excel(file_path, sheet_name, index_col=None, header=header)
+        else:
+            # read file data by sheet_name
+            sheet = book.sheet_by_name(sheet_name)
+            # get and overwrite merged cells
+            data = []
+            for row_index in range(sheet.nrows):
+                row = []
+                for col_index in range(sheet.ncols):
+                    valor = sheet.cell(row_index, col_index).value
+                    if valor == '':
+                        for crange in sheet.merged_cells:
+                            rlo, rhi, clo, chi = crange
+                            if rlo <= row_index < rhi and clo <= col_index < chi:
+                                valor = sheet.cell(rlo, clo).value
+                                break
+                    row.append(valor)
+                data.append(row)
+            data = pd.DataFrame(data)
+        # remove leading and trailing whitespaces in cells
+        data = data.applymap(lambda x: str(x).strip())
+        # remove None types in different formats
+        data = data.replace(["NA", "NONE", "NAN", "NULL", ""], np.nan)
+        # read colours info
+        if not file_only:
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+            sh = wb[sheet_name]
+            return data, sh, sheet_name
+        else:
+            return data
+
+    def rename_duplicate_column_names(self, df):
+        # df is the dataframe that you want to rename duplicated columns
+        cols = pd.Series(df.columns)
+        for dup in cols[cols.duplicated()].unique():
+            cols[cols[cols == dup].index.values.tolist()] = [dup + '_' + str(i) if i != 0 else dup for i in
+                                                             range(sum(cols == dup))]
+
+        # rename the columns with the cols list.
+        df.columns = cols
+        return df
 
     def get_main_data(self, data, skiprows = None, headerrows= None):
         """
@@ -183,8 +196,8 @@ class VMPropsManager(object):
         if headerrows is None:
             headerrows = self.__parameters['shape']['number_of_header_rows']
         # run analysis
-        new_header = data.iloc[skiprows]
-        data = data.iloc[skiprows+1:,]
+        new_header = data.iloc[skiprows+headerrows-1]
+        data = data.iloc[skiprows+headerrows:,]
         data.columns = new_header
         return data
 
@@ -207,11 +220,8 @@ class VMPropsManager(object):
         data = data.iloc[:, :last_idx]
         return data
 
-    def get_index_to_split_tables2(self, data_1_clean, country_col=None):
-        # load parameters if not specified
-        if country_col is None:
-            country_col = self.__parameters['names']['country_col']
-        return [data_1_clean[~pd.isna(data_1_clean[country_col])].index[0]]
+    def get_index_to_split_tables2(self, data_1):
+        return [data_1[data_1.isna().all(axis=1)].index[0]]
 
     def get_index_to_split_tables(self, main_data, skipcols=None, tallycols=None):
         """ 
@@ -256,12 +266,12 @@ class VMPropsManager(object):
         # run analysis
         if len(col_name_list) == 1:
             data_1 = data.loc[:col_name_list[0]-1,]
-            data_2 = data.loc[col_name_list[0]-1:,]
+            data_2 = data.loc[col_name_list[0]:,]
             return data_1, data_2
         elif len(col_name_list) == 2:
             data_1 = data.loc[:col_name_list[0]-1,]
-            data_2 = data.loc[col_name_list[0]-1:col_name_list[1]-1,]
-            data_3 = data.loc[col_name_list[1]-1:,]
+            data_2 = data.loc[col_name_list[0]:col_name_list[1]-1,]
+            data_3 = data.loc[col_name_list[1]:,]
             return data_1, data_2, data_3
 
     def clean_main_data(self, data, country_col=None, drop_rows_with=None):
@@ -282,15 +292,8 @@ class VMPropsManager(object):
         if drop_rows_with is None:
             drop_rows_with = self.__parameters['names']['drop_rows_with']
         # run analysis
-        # drop 'duplicate' rows where totals are dupl
-        # not available in UI settings yet
-        for col, item in zip(drop_rows_with.keys(), drop_rows_with.values()):
-            data = data[~data[col].isin(item)]
-        # format country
-        country_col_2_ind = data.columns.get_loc(country_col) + 1
-        data[country_col] = data.iloc[:, country_col_2_ind].fillna(data[country_col])
-        # fill na with above country (some not merged properly)
-        data.loc[:, country_col] = data.loc[:, country_col].ffill()
+        # replace duplicate columns
+        data = self.rename_duplicate_column_names(data)
         return data
 
     def shorten_table_w_max_rows(self, data, max_rows=None):
@@ -311,7 +314,7 @@ class VMPropsManager(object):
         # run analysis
         return data.iloc[:max_rows,]
 
-    def format_main_data(self, data):
+    def format_main_data(self, data, country_col=None, drop_rows_with=None, skipcols_front=None, skipcols_end=None):
         """
         
         Parameters
@@ -322,11 +325,36 @@ class VMPropsManager(object):
         -------
 
         """
+        # load parameters if not specified
+        if country_col is None:
+            country_col = self.__parameters['names']['country_col']
+        if drop_rows_with is None:
+            drop_rows_with = self.__parameters['names']['drop_rows_with']
+        if skipcols_front is None:
+            skipcols_front = self.__parameters['shape']['props_header_start_col']
+        if skipcols_end is None:
+            skipcols_end = self.__parameters['shape']['props_header_end_col']
+        # start analysis
+        # drop 'duplicate' rows where any of the Total word exists
+        for cell_value in drop_rows_with:
+            data = data[~pd.DataFrame(data == cell_value).any(axis='columns')]
+
+        # format country
+        country_col_2_ind = data.columns.get_loc(country_col) + 1
+        data[country_col] = data.iloc[:, country_col_2_ind].fillna(data[country_col])
+
+        # fill na with above country (some not merged properly)
+        data.loc[:, country_col] = data.loc[:, country_col].ffill()
+
         # fillna
         df = data.fillna(0)
 
         # clear white space cells
         df = df.applymap(lambda x: 0 if str(x).isspace() else x)
+
+        # format prop columns into numeric
+        for col_idx in range(skipcols_front, df.shape[1]+skipcols_end):
+            df.iloc[:, col_idx] = pd.to_numeric(df.iloc[:, col_idx], errors='coerce')
 
         # add row sum
         df.loc[max(df.index) + 1] = df.sum(numeric_only=True)
@@ -346,10 +374,10 @@ class VMPropsManager(object):
             skipcols_end = self.__parameters['shape']['props_header_end_col']
         # run analysis
         checker = pd.DataFrame()
-        checker['main'] = list(df.iloc[-1, skipcols_front:skipcols_end].fillna(0).astype(int))
-        checker['summary'] = list(summary.iloc[sum_row, skipcols_front:skipcols_end].fillna(0).astype(int))
+        checker['VM PROPS'] = list(df.iloc[:, skipcols_front:skipcols_end].columns)
+        checker['main'] = pd.to_numeric(list(df.iloc[-1, skipcols_front:skipcols_end].fillna(0)))
+        checker['summary'] = pd.to_numeric(list(summary.iloc[sum_row, skipcols_front:skipcols_front+len(checker)].fillna(0)))
         checker['checks'] = list(checker['main'] == checker['summary'])
-        checker = checker.set_index(df.iloc[:, skipcols_front:skipcols_end].columns)
         return checker
 
     def get_excel_col_from_int(self, n):

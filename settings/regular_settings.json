@@ -17,8 +17,6 @@
         "storesap_col": "",
         "main_cols": ["COUNTRY NAME"],
         "entity_list": ["CKS","CKI","CKC"],
-        "drop_rows_with": {
-            "NO": ["Total:"]
-        }
+        "drop_rows_with": ["Total:"]
     }
 }

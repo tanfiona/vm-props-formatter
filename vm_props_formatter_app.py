@@ -51,7 +51,7 @@ hover_text = {
     'settings-shape-props-header-end-col-text': 
         ['e.g. Last column (REMARKS) to drop that do not require to tallying'],
     'settings-names-sheet-name-text':
-        ['If left as blank, app auto-reads sheet name that has any of the entity names indicated below'],
+        ['If left as blank, app auto-reads the first visible sheet.'],
     'settings-names-store-col-text':
         ['Column name that represents Store'],
     'settings-names-storesap-col-text':
@@ -297,16 +297,15 @@ def generate_hover_text(target_name):
     )
 
 
-def generate_slider(id):
-    m = 5 # multiple 
-    max_v = 20 # max bar
-    count = int(round(max_v/m,0)) # number of marks
+def generate_slider(id, min_v=0, max_v=20, m=5):
+    """"""
+    count = int(round((max_v-min_v)/m,0)) # number of marks, m=multiple
     markers = {}
     for i in range(m,(count+1)*m,m):
         markers[i]= str(i) # add items to dict
     return dcc.Slider(
         id=id,
-        min=0,
+        min=min_v,
         max=max_v,
         step=1,
         marks=markers
@@ -558,7 +557,9 @@ app.layout = html.Div(
                                                             'settings-shape-props-header-end-col-text'
                                                         ),
                                                         generate_slider(
-                                                            'settings-shape-props-header-end-col-slider'
+                                                            'settings-shape-props-header-end-col-slider',
+                                                            min_v=-20,
+                                                            max_v=0
                                                         ),
 
                                                     ],
@@ -1034,26 +1035,30 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
             data, data_sh_colours, sheet_name = vm.load_dataset(
                 vm_props_order_summary_file, vm_props_order_summary_filename, import_merged=True)
             main_data = vm.get_main_data(data)
-            main_data = vm.dropna_rows_cols(main_data)
-            # load parameters if not specified
+            # split main and summary
             col_name_list = vm.get_index_to_split_tables(main_data)
             if len(col_name_list) == 1:
                 data_1, data_2 = vm.get_split_data(main_data, col_name_list)
             elif len(col_name_list) == 2:
                 data_1, data_2, data_3 = vm.get_split_data(main_data, col_name_list)
-            data_1_clean = vm.clean_main_data(data_1.copy())
-            col_name_list = vm.get_index_to_split_tables2(data_1_clean)
-            data_1_head, data_1_body = vm.get_split_data(data_1_clean, col_name_list)
+            col_name_list = vm.get_index_to_split_tables2(data_1)
+            # split main 1 and main 2
+            data_1_head, data_1_body = vm.get_split_data(data_1, col_name_list)
+            # clean and format data
+            main_data = vm.dropna_rows_cols(data_1_body)
+            main_data_clean = vm.clean_main_data(main_data.copy())
+            df = vm.format_main_data(main_data_clean)
             summary_df = vm.shorten_table_w_max_rows(data_2)
-            df = vm.format_main_data(data_1_body)
+            # cross check data
             checked_data = vm.main_and_summary_checker(df, summary_df)
+            # export format
             so_table = vm.main_table_to_so_converter(df)
             so_format_data = vm.get_cell_colour_col(so_table, data_sh_colours)
             # add VM Batch Props Tag if file is uploaded / file exists
             if None not in (props_batch_content, props_batch_content_filename):
                 props_batch_content_file = io.BytesIO(base64.b64decode(props_batch_content.split(',')[-1]))
                 b_data = vm.load_dataset(props_batch_content_file, props_batch_content_filename,
-                                         file_only=True, sheet_name=None, sheet_loc=0, header=0)
+                                         file_only=True, sheet_name=None, header=0)
                 so_format_data = so_format_data.merge(b_data.apply(lambda x: x.astype(str).str.upper()),
                                                       how='left', right_on='Product Name', left_on='VM PROPS')
                 del(so_format_data['Product Name'])
