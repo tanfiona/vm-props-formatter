@@ -962,7 +962,7 @@ def load_settings(load_settings_clicks, load_default_settings_clicks, analysis_t
         Input('upload-country-whs-names', 'contents'),
         Input('upload-props-batch-names', 'contents'),
         Input('start-order-check-button', 'n_clicks'),
-        Input('settings-type-dropdown', 'value')
+        Input('analysis-type-dropdown', 'value')
     ],
     [
         State('upload-vm-props-order-summary', 'filename'),
@@ -1012,7 +1012,7 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
     download_report_output = []
     are_outputs_available = False
 
-    if None not in (vm_props_order_summary_content, vm_props_order_summary_filename, start_analysis_clicks) \
+    if None not in (analysis_type, vm_props_order_summary_content, vm_props_order_summary_filename, start_analysis_clicks) \
             and start_analysis_clicks > 0 and start_analysis_clicks > current_start_analysis_clicks:
         if analysis_type == 'Regular':
             filename = settings_path + 'regular_settings.json'
@@ -1086,8 +1086,8 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
         current_start_analysis_clicks = start_analysis_clicks
         print('[Status]', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ' Analysis complete!')
 
-    return so_format_datatable_data, so_format_datatable_columns, [], \
-           checked_datatable_data, checked_datatable_columns, [], download_report_output
+    return so_format_datatable_data, so_format_datatable_columns, [], checked_datatable_data, \
+           checked_datatable_columns, [], download_report_output
 
 
 # Download the report
