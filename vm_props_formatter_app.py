@@ -62,7 +62,7 @@ hover_text = {
         ['Main cols that represents index of SO Table.',html.Br(),
          'Tip: Put only Country if the Store Locations given are wrong.'],
     'settings-names-entity-list-text':
-        ['This list indicates how to find sheet name based on if entity is present in file name.']
+        ['[NOT USED] This list indicates how to find sheet name based on if entity is present in file name.']
 }
 entity_list = ['CKS','CKI','CKC']
 
