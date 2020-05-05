@@ -220,8 +220,11 @@ class VMPropsManager(object):
         data = data.iloc[:, :last_idx]
         return data
 
-    def get_index_to_split_tables2(self, data_1):
-        return [data_1[data_1.isna().all(axis=1)].index[0]]
+    def get_index_to_split_tables2(self, data_1, main_cols=None):
+        # load parameters if not specified
+        if main_cols is None:
+            main_cols = self.__parameters['names']['main_cols']
+        return [data_1[data_1[main_cols].isna().all(axis=1)].index[0]]
 
     def get_index_to_split_tables(self, main_data, skipcols=None, tallycols=None):
         """ 
