@@ -296,6 +296,7 @@ class VMPropsManager(object):
             drop_rows_with = self.__parameters['names']['drop_rows_with']
         # run analysis
         # replace duplicate columns
+        data.columns = [str(x).upper().strip() for x in data.columns]
         data = self.rename_duplicate_column_names(data)
         return data
 

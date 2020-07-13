@@ -1059,8 +1059,8 @@ def run_analysis(vm_props_order_summary_content, country_whs_content, props_batc
                 props_batch_content_file = io.BytesIO(base64.b64decode(props_batch_content.split(',')[-1]))
                 b_data = vm.load_dataset(props_batch_content_file, props_batch_content_filename,
                                          file_only=True, sheet_name=None, header=0)
-                so_format_data = so_format_data.merge(b_data.apply(lambda x: x.astype(str).str.upper()),
-                                                      how='left', right_on='Product Name', left_on='VM PROPS')
+                b_data = b_data.applymap(lambda x: str(x).upper().strip())
+                so_format_data = so_format_data.merge(b_data, how='left', right_on='Product Name', left_on='VM PROPS')
                 del(so_format_data['Product Name'])
         # Format outputs
         if so_format_data is not None and not so_format_data.empty:
